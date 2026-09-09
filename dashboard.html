@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Финансовый дашборд СНТ</title>
+<style>
+:root{font-family:Inter,"Segoe UI",Arial,sans-serif;color:#172033;background:#f4f7fb}*{box-sizing:border-box}body{margin:0}.wrap{max-width:1100px;margin:auto;padding:28px 18px}h1{margin:0 0 6px;font-size:28px}.note{color:#64748b;margin:0 0 22px}.panel{background:#fff;border:1px solid #e5eaf1;border-radius:14px;padding:18px;margin-bottom:16px;box-shadow:0 4px 18px #1720330a}.row{display:flex;gap:14px;margin-bottom:14px;flex-wrap:wrap}.card{flex:1;min-width:280px;background:#fff;border:1px solid #e5eaf1;border-radius:12px;padding:14px;box-shadow:0 3px 12px #1720330a}.label{font-size:12px;color:#64748b}.value{font-size:22px;font-weight:700;margin-top:6px;color:#172033}.sub{font-size:13px;margin-top:7px}.neg{color:#dc3545}.pos{color:#16855b}.progress{height:8px;background:#e7edf1;border-radius:99px;overflow:hidden;margin-top:7px}.progress-fill{height:100%;width:0;border-radius:99px;background:#2E5A3A;transition:width .45s ease}.chart-wrap{background:#fff;border:1px solid #e5eaf1;border-radius:12px;padding:14px;box-shadow:0 3px 12px #1720330a;margin-bottom:14px}.chart-box{height:320px;position:relative}h3{margin:0 0 12px;font-size:16px;color:#172033}.legend-table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px}.legend-table th,.legend-table td{padding:8px 10px;border-bottom:1px solid #edf0f5;text-align:right}.legend-table th:first-child,.legend-table td:first-child{text-align:left}.legend-table th{font-size:12px;color:#64748b;font-weight:600}.legend-table tbody tr{cursor:pointer;transition:background 0.15s}.legend-table tbody tr:hover{background:#f8fafc}.legend-table tbody tr.active{background:#e8f0f8}.legend-table .col-name{font-weight:500}.indicator{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}.ind-plan{background:#5B6663}.ind-fact{background:#2E5A3A}.loading{text-align:center;padding:40px;color:#64748b}.error{background:#fef2f2;border:1px solid #fecaca;color:#b42318;padding:14px;border-radius:10px;margin-bottom:16px}
+</style>
+</head>
+<body><main class="wrap">
+<h1 id="reportTitle">Финансовый дашборд СНТ</h1>
+<p class="note" id="reportPeriod">Загрузка данных…</p>
+<div id="errorBox" class="error" style="display:none"></div>
+<div id="loading" class="loading">Загрузка данных из data.json…</div>
+<div id="dashboard" style="display:none">
+<div class="row">
+  <div class="card"><div class="label">Доходы: план</div><div class="value" id="incPlan">0 ₽</div></div>
+  <div class="card"><div class="label">Доходы: факт</div><div class="value pos" id="incFact">0 ₽</div><div class="sub pos" id="incPct">Исполнение: 0%</div><div class="progress" aria-label="Исполнение плана доходов"><div class="progress-fill" id="incProgress"></div></div></div>
+  <div class="card"><div class="label">Доходы: отклонение</div><div class="value neg" id="incDev">0 ₽</div></div>
+</div>
+<div class="row">
+  <div class="card"><div class="label">Расходы: план</div><div class="value" id="expPlan">0 ₽</div></div>
+  <div class="card"><div class="label">Расходы: факт</div><div class="value pos" id="expFact">0 ₽</div><div class="sub pos" id="expPct">Освоение: 0%</div><div class="progress" aria-label="Освоение плана расходов"><div class="progress-fill" id="expProgress"></div></div></div>
+  <div class="card"><div class="label">Расходы: отклонение</div><div class="value neg" id="expDev">0 ₽</div></div>
+</div>
+<div class="chart-wrap"><h3>Доходы: план и факт</h3><div class="chart-box"><canvas id="incomeChart"></canvas></div><table class="legend-table" id="incomeLegend"><thead><tr><th>Статья</th><th>План</th><th>Факт</th><th>Отклонение</th></tr></thead><tbody></tbody></table></div>
+<div class="chart-wrap"><h3>Расходы: план и факт</h3><div class="chart-box"><canvas id="expenseChart"></canvas></div><table class="legend-table" id="expenseLegend"><thead><tr><th>Статья</th><th>План</th><th>Факт</th><th>Отклонение</th></tr></thead><tbody></tbody></table></div>
+</div>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script>
+(function(){
+  const money=v=>new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB',maximumFractionDigits:0}).format(v);
+  const pct=(f,p)=>p?Math.round(f/p*100):0;
+  function showError(msg){document.getElementById('errorBox').textContent=msg;document.getElementById('errorBox').style.display='block';document.getElementById('loading').style.display='none'}
+  function render(data){
+    document.getElementById('reportTitle').textContent=data.title||'Финансовый дашборд СНТ';
+    document.getElementById('reportPeriod').textContent='Период: '+(data.period||'не указан');
+    const inc=data.income||[],exp=data.expense||[];
+    const incTotal=inc.reduce((s,r)=>({plan:s.plan+(Number(r.plan)||0),fact:s.fact+(Number(r.fact)||0),dev:s.dev+((Number(r.fact)||0)-(Number(r.plan)||0))}),{plan:0,fact:0,dev:0});
+    const expTotal=exp.reduce((s,r)=>({plan:s.plan+(Number(r.plan)||0),fact:s.fact+(Number(r.fact)||0),dev:s.dev+((Number(r.fact)||0)-(Number(r.plan)||0))}),{plan:0,fact:0,dev:0});
+    document.getElementById('incPlan').textContent=money(incTotal.plan);
+    document.getElementById('incFact').textContent=money(incTotal.fact);
+    const incP=pct(incTotal.fact,incTotal.plan);
+    document.getElementById('incPct').textContent='Исполнение: '+incP+'%';
+    document.getElementById('incProgress').style.width=Math.min(incP,100)+'%';
+    document.getElementById('incDev').textContent=money(incTotal.dev);
+    document.getElementById('expPlan').textContent=money(expTotal.plan);
+    document.getElementById('expFact').textContent=money(expTotal.fact);
+    const expP=pct(expTotal.fact,expTotal.plan);
+    document.getElementById('expPct').textContent='Освоение: '+expP+'%';
+    document.getElementById('expProgress').style.width=Math.min(expP,100)+'%';
+    document.getElementById('expDev').textContent=money(expTotal.dev);
+    function legend(chart,legendId,rows,type){
+      const tbody=document.querySelector('#'+legendId+' tbody');
+      const allRows=[];
+      const allTr=document.createElement('tr');allTr.className='active';
+      allTr.innerHTML='<td class="col-name"><span class="indicator" style="background:#94a3b8"></span>Все статьи</td><td>'+money(rows.reduce((s,r)=>s+(Number(r.plan)||0),0))+'</td><td>'+money(rows.reduce((s,r)=>s+(Number(r.fact)||0),0))+'</td><td class="'+(rows.reduce((s,r)=>s+((Number(r.fact)||0)-(Number(r.plan)||0)),0)<0?'neg':'pos')+'">'+money(rows.reduce((s,r)=>s+((Number(r.fact)||0)-(Number(r.plan)||0)),0))+'</td>';
+      tbody.appendChild(allTr);allRows.push(allTr);
+      rows.forEach((row,idx)=>{
+        const tr=document.createElement('tr');
+        tr.innerHTML='<td class="col-name"><span class="indicator ind-'+type+'"></span>'+row.name+'</td><td>'+money(row.plan)+'</td><td>'+money(row.fact)+'</td><td class="'+(((Number(row.fact)||0)-(Number(row.plan)||0))<0?'neg':'pos')+'">'+money((Number(row.fact)||0)-(Number(row.plan)||0))+'</td>';
+        tbody.appendChild(tr);allRows.push(tr);
+        tr.addEventListener('click',()=>{
+          allRows.forEach(r=>r.classList.remove('active'));tr.classList.add('active');
+          const nd=new Array(rows.length).fill(null);nd[idx]=row.plan;chart.data.datasets[0].data=nd;
+          const nd2=new Array(rows.length).fill(null);nd2[idx]=row.fact;chart.data.datasets[1].data=nd2;
+          chart.update();
+        });
+      });
+      allTr.addEventListener('click',()=>{
+        allRows.forEach(r=>r.classList.remove('active'));allTr.classList.add('active');
+        chart.data.datasets[0].data=rows.map(r=>r.plan);chart.data.datasets[1].data=rows.map(r=>r.fact);chart.update();
+      });
+    }
+    const incChart=new Chart(document.getElementById('incomeChart'),{type:'bar',data:{labels:inc.map(r=>r.name),datasets:[{label:'План',data:inc.map(r=>r.plan),backgroundColor:'#5B6663',borderRadius:6},{label:'Факт',data:inc.map(r=>r.fact),backgroundColor:'#2E5A3A',borderRadius:6}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+money(c.raw)}}},scales:{y:{beginAtZero:true,ticks:{callback:v=>new Intl.NumberFormat('ru-RU',{notation:'compact',maximumFractionDigits:1}).format(v)+' ₽'}},x:{grid:{display:false},ticks:{display:false}}}}});
+    legend(incChart,'incomeLegend',inc,'plan');
+    const expChart=new Chart(document.getElementById('expenseChart'),{type:'bar',data:{labels:exp.map(r=>r.name),datasets:[{label:'План',data:exp.map(r=>r.plan),backgroundColor:'#5B6663',borderRadius:6},{label:'Факт',data:exp.map(r=>r.fact),backgroundColor:'#2E5A3A',borderRadius:6}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+money(c.raw)}}},scales:{y:{beginAtZero:true,ticks:{callback:v=>new Intl.NumberFormat('ru-RU',{notation:'compact',maximumFractionDigits:1}).format(v)+' ₽'}},x:{grid:{display:false},ticks:{display:false}}}}});
+    legend(expChart,'expenseLegend',exp,'fact');
+  }
+  fetch('data.json').then(r=>{if(!r.ok)throw new Error('Не удалось загрузить data.json (код '+r.status+')');return r.json()}).then(data=>{document.getElementById('loading').style.display='none';document.getElementById('dashboard').style.display='block';render(data)}).catch(e=>showError('Ошибка загрузки данных: '+e.message+'. Убедитесь, что файл data.json находится в той же папке, что и dashboard.html.'));
+})();
+</script>
+</body></html>
